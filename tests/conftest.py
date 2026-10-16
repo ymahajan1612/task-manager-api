@@ -1,18 +1,59 @@
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy import create_engine
-from app.database_models import User, Task
+import pytest
+from sqlalchemy import delete
 
-TEST_DATABASE_URL = "postgresql+psycopg://postgres:xxx@localhost:5432/taskManager_test"
+from app.main import app
+from app.database import get_db, get_test_db, SessionLocalTest
+from app.database_models import Task, User
+from app.security import hash_password
+from app.security import create_access_token
 
-test_engine = create_engine(TEST_DATABASE_URL)
+from fastapi.testclient import TestClient
 
-SessionLocalTest = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
 
-def get_test_db():
-    test_db = SessionLocalTest()
+
+app.dependency_overrides[get_db] = get_test_db
+
+@pytest.fixture()
+def client():
+    with TestClient(app) as test_client:
+        yield test_client
+
+@pytest.fixture(autouse=True)
+def reset_database():
+    db = SessionLocalTest()
+
     try:
-        yield test_db
+        db.execute(delete(Task))
+        db.execute(delete(User))
+        db.commit()
+
+        yield
+
+        db.execute(delete(Task))
+        db.execute(delete(User))
+        db.commit()
     finally:
-        test_db.close()
+        db.close()
 
 
+@pytest.fixture()
+def test_user():
+    db = SessionLocalTest()
+    password = "testpassword"
+    hashed_password = hash_password(password)
+    user = User(email="testuser@gmail.com" , hashed_password=hashed_password)
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    db.close()
+    return user
+
+
+@pytest.fixture
+def auth_headers(test_user):
+    user_id = str(test_user.id)
+    token = create_access_token(
+        user_id=user_id
+    )
+
+    return {"Authorization": f"Bearer {token}"}

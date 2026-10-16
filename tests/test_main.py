@@ -1,71 +1,41 @@
-from fastapi.testclient import TestClient
 import pytest
 
-from app.main import app
-
-from sqlalchemy import delete
-from app.database import get_db, get_test_db, SessionLocalTest
-from app.database_models import Task, User
 from uuid import UUID, uuid4
 
 
-client = TestClient(app)
-
-TEST_USER_ID = UUID("203cc458-009f-41dc-bfba-28b9fe3c031c")
-
-app.dependency_overrides[get_db] = get_test_db
 
 
-@pytest.fixture(autouse=True)
-def reset_database():
-    db = SessionLocalTest()
-
-    db.execute(delete(Task))
-    db.execute(delete(User))
-    db.commit()
-
-    test_user = User(
-        id=TEST_USER_ID,
-        email="test@example.com",
-    )
-
-    db.add(test_user)
-    db.commit()
-    db.close()
-
-    yield
-
-    db = SessionLocalTest()
-
-    db.execute(delete(Task))
-    db.execute(delete(User))
-    db.commit()
-
-    db.close()
 
 
-def test_root():
+@pytest.fixture
+def sample_task():
+    return {
+        "title": "Test Title",
+        "description": "Test Description",
+        "due_date": "2026-09-30",
+    }
+
+def test_root(client):
     response = client.get("/")
 
     assert response.status_code == 200
     assert response.json() == {"message": "Hello World"}
 
 
-def test_health_check():
+def test_health_check(client):
     response = client.get("/health")
 
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
 
 
-def test_create_task():
+def test_create_task(client, sample_task, auth_headers):
+
+    
     response = client.post(
         "/tasks",
-        json={
-            "title": "Test Title",
-            "description": "Test Description",
-            "due_date": "2026-09-30",
-        },
+        json=sample_task,
+        headers=auth_headers,
     )
 
     data = response.json()
@@ -80,7 +50,7 @@ def test_create_task():
     assert data["status"] == "not_started"
 
 
-def test_list_tasks():
+def test_list_tasks(client, auth_headers):
     client.post(
         "/tasks",
         json={
@@ -88,6 +58,7 @@ def test_list_tasks():
             "description": "First Description",
             "due_date": "2026-09-30",
         },
+        headers=auth_headers,
     )
 
     client.post(
@@ -97,9 +68,10 @@ def test_list_tasks():
             "description": "Second Description",
             "due_date": "2026-10-01",
         },
+        headers=auth_headers,
     )
 
-    response = client.get("/tasks")
+    response = client.get("/tasks", headers=auth_headers)
     data = response.json()
 
     assert response.status_code == 200
@@ -119,7 +91,7 @@ def test_list_tasks():
     assert statuses == {"not_started"}
 
 
-def test_get_task():
+def test_get_task(client, auth_headers):
     create_response = client.post(
         "/tasks",
         json={
@@ -127,11 +99,12 @@ def test_get_task():
             "description": "Test Description",
             "due_date": "2026-09-30",
         },
+        headers=auth_headers,
     )
 
     task_id = create_response.json()["id"]
 
-    response = client.get(f"/tasks/{task_id}")
+    response = client.get(f"/tasks/{task_id}", headers=auth_headers)
     data = response.json()
 
     assert response.status_code == 200
@@ -145,16 +118,16 @@ def test_get_task():
     assert data["status"] == "not_started"
 
 
-def test_get_task_not_found():
+def test_get_task_not_found(client, auth_headers):
     missing_id = uuid4()
 
-    response = client.get(f"/tasks/{missing_id}")
+    response = client.get(f"/tasks/{missing_id}", headers=auth_headers)
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Task not found"}
 
 
-def test_update_task():
+def test_update_task(client, auth_headers):
     create_response = client.post(
         "/tasks",
         json={
@@ -162,6 +135,7 @@ def test_update_task():
             "description": "Original Description",
             "due_date": "2026-09-30",
         },
+        headers=auth_headers,
     )
 
     task_id = create_response.json()["id"]
@@ -174,6 +148,7 @@ def test_update_task():
             "due_date": "2026-10-15",
             "status": "in_progress",
         },
+        headers=auth_headers,
     )
 
     data = response.json()
@@ -189,7 +164,7 @@ def test_update_task():
     assert data["status"] == "in_progress"
 
 
-def test_update_task_preserves_fields_when_not_provided():
+def test_update_task_preserves_fields_when_not_provided(client, auth_headers):
     create_response = client.post(
         "/tasks",
         json={
@@ -197,6 +172,7 @@ def test_update_task_preserves_fields_when_not_provided():
             "description": "Original Description",
             "due_date": "2026-09-30",
         },
+        headers=auth_headers,
     )
 
     task_id = create_response.json()["id"]
@@ -206,6 +182,7 @@ def test_update_task_preserves_fields_when_not_provided():
         json={
             "title": "Updated Title",
         },
+        headers=auth_headers,
     )
 
     data = response.json()
@@ -221,7 +198,7 @@ def test_update_task_preserves_fields_when_not_provided():
     assert data["status"] == "not_started"
 
 
-def test_update_task_status():
+def test_update_task_status(client, auth_headers):
     create_response = client.post(
         "/tasks",
         json={
@@ -229,6 +206,7 @@ def test_update_task_status():
             "description": "Testing status updates",
             "due_date": "2026-09-30",
         },
+        headers=auth_headers,
     )
 
     task_id = create_response.json()["id"]
@@ -238,6 +216,7 @@ def test_update_task_status():
         json={
             "status": "done",
         },
+        headers=auth_headers,
     )
 
     data = response.json()
@@ -246,12 +225,23 @@ def test_update_task_status():
     assert data["status"] == "done"
 
 
-def test_invalid_task_status():
+@pytest.mark.parametrize(
+    "status, expected_code",
+    [
+        ("not_started", 200),
+        ("in_progress", 200),
+        ("done", 200),
+        ("banana", 422),
+    ],
+)
+def test_task_status(client, status, expected_code, auth_headers):
     create_response = client.post(
         "/tasks",
         json={
-            "title": "Invalid Status Test",
+            "title": "Status Test",
         },
+        headers=auth_headers,
+    
     )
 
     task_id = create_response.json()["id"]
@@ -259,14 +249,15 @@ def test_invalid_task_status():
     response = client.patch(
         f"/tasks/{task_id}",
         json={
-            "status": "banana",
+            "status": status,
         },
+        headers=auth_headers,
     )
 
-    assert response.status_code == 422
+    assert response.status_code == expected_code
 
 
-def test_update_task_not_found():
+def test_update_task_not_found(client, auth_headers):
     missing_id = uuid4()
 
     response = client.patch(
@@ -274,13 +265,14 @@ def test_update_task_not_found():
         json={
             "title": "Updated title",
         },
+        headers=auth_headers,
     )
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Task not found"}
 
 
-def test_delete_task():
+def test_delete_task(client, auth_headers):
     create_response = client.post(
         "/tasks",
         json={
@@ -288,22 +280,23 @@ def test_delete_task():
             "description": "Test Delete Task Description",
             "due_date": "2026-09-30",
         },
+        headers=auth_headers,   
     )
 
     task_id = create_response.json()["id"]
 
-    delete_response = client.delete(f"/tasks/{task_id}")
+    delete_response = client.delete(f"/tasks/{task_id}", headers=auth_headers)
 
     assert delete_response.status_code == 204
 
-    get_response = client.get(f"/tasks/{task_id}")
+    get_response = client.get(f"/tasks/{task_id}", headers=auth_headers)
 
     assert get_response.status_code == 404
     assert get_response.json() == {"detail": "Task not found"}
 
 
 
-def test_filter_tasks_by_status():
+def test_filter_tasks_by_status(client, auth_headers):
     first = client.post(
         "/tasks",
         json={
@@ -311,6 +304,7 @@ def test_filter_tasks_by_status():
             "description": "First Description",
             "due_date": "2026-09-30",
         },
+        headers=auth_headers,
     ).json()
 
     second = client.post(
@@ -320,6 +314,7 @@ def test_filter_tasks_by_status():
             "description": "Second Description",
             "due_date": "2026-10-05",
         },
+        headers=auth_headers,
     ).json()
 
     client.patch(
@@ -327,9 +322,10 @@ def test_filter_tasks_by_status():
         json={
             "status": "done",
         },
+        headers=auth_headers,
     )
 
-    response = client.get("/tasks?status=done")
+    response = client.get("/tasks?status=done", headers=auth_headers)
     data = response.json()
 
     assert response.status_code == 200
@@ -338,13 +334,14 @@ def test_filter_tasks_by_status():
     assert data[0]["status"] == "done"
 
 
-def test_filter_tasks_by_due_before():
+def test_filter_tasks_by_due_before(client, auth_headers):
     client.post(
         "/tasks",
         json={
             "title": "Earlier Task",
             "due_date": "2026-09-25",
         },
+        headers=auth_headers,
     )
 
     client.post(
@@ -353,9 +350,10 @@ def test_filter_tasks_by_due_before():
             "title": "Later Task",
             "due_date": "2026-10-05",
         },
+        headers=auth_headers,
     )
 
-    response = client.get("/tasks?due_before=2026-09-30")
+    response = client.get("/tasks?due_before=2026-09-30", headers=auth_headers)
     data = response.json()
 
     assert response.status_code == 200
@@ -363,13 +361,14 @@ def test_filter_tasks_by_due_before():
     assert data[0]["title"] == "Earlier Task"
 
 
-def test_filter_tasks_by_due_after():
+def test_filter_tasks_by_due_after(client, auth_headers):
     client.post(
         "/tasks",
         json={
             "title": "Earlier Task",
             "due_date": "2026-09-25",
         },
+        headers=auth_headers,
     )
 
     client.post(
@@ -378,9 +377,10 @@ def test_filter_tasks_by_due_after():
             "title": "Later Task",
             "due_date": "2026-10-05",
         },
+        headers=auth_headers,
     )
 
-    response = client.get("/tasks?due_after=2026-09-30")
+    response = client.get("/tasks?due_after=2026-09-30", headers=auth_headers)
     data = response.json()
 
     assert response.status_code == 200
