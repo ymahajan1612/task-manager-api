@@ -57,3 +57,23 @@ def auth_headers(test_user):
     )
 
     return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+def second_user():
+    db = SessionLocalTest()
+
+    try:
+        user = User(
+            email="seconduser@example.com",
+            hashed_password=hash_password("testpassword"),
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        return user
+    finally:
+        db.close()
+
+
+

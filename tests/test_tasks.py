@@ -3,10 +3,6 @@ import pytest
 from uuid import UUID, uuid4
 
 
-
-
-
-
 @pytest.fixture
 def sample_task():
     return {
