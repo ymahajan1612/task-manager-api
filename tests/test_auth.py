@@ -3,6 +3,12 @@ from uuid import uuid4, UUID
 import jwt
 from datetime import datetime, timedelta, timezone
 
+from app.security import (
+    create_access_token,
+    SECRET_KEY,
+    ALGORITHM,
+)
+
 def test_register_user_success(client):
     response = client.post(
         "/auth/register",
@@ -14,14 +20,6 @@ def test_register_user_success(client):
     assert response.status_code == 201
     UUID(response.json()["id"])
     assert response.json()["email"] == "test@example.com"
-
-
-
-from app.security import (
-    create_access_token,
-    SECRET_KEY,
-    ALGORITHM,
-)
 
 
 def test_register_duplicate_email(client, test_user):
