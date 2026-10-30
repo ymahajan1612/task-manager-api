@@ -409,4 +409,16 @@ def test_status_complete(client, auth_headers):
     ).json()
 
     assert data["completed_at"] is not None
+
+    undo_response = client.patch(
+        f"/tasks/{task_id}",
+        json={"status": "in_progress"},
+        headers=auth_headers,
+    )
+
+    assert undo_response.status_code == 200
+    data = client.get(
+        f"/tasks/{task_id}", headers=auth_headers
+    ).json()
+    assert data["completed_at"] is None
     
