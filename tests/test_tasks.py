@@ -382,3 +382,31 @@ def test_filter_tasks_by_due_after(client, auth_headers):
     assert response.status_code == 200
     assert len(data) == 1
     assert data[0]["title"] == "Later Task"
+
+
+def test_status_complete(client, auth_headers):
+    response = client.post(
+        "/tasks",
+        json={
+            "title": "Task to be completed",
+            "description": "This task is intended to be marked as done",
+            "due_date": "2026-09-30",
+        },
+        headers=auth_headers,
+    )
+
+    task_id = response.json()["id"]
+    patch_response = client.patch(
+        f"/tasks/{task_id}",
+        json={"status": "done"},
+        headers=auth_headers,
+    )
+
+    assert patch_response.status_code == 200
+
+    data = client.get(
+        f"/tasks/{task_id}", headers=auth_headers
+    ).json()
+
+    assert data["completed_at"] is not None
+    

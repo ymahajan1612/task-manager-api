@@ -1,6 +1,6 @@
 from pydantic import BaseModel, EmailStr, Field
 from uuid import UUID
-from datetime import date
+from datetime import date, datetime
 from enum import Enum
 
 
@@ -19,6 +19,8 @@ class TaskCreate(BaseModel):
 class TaskResponse(TaskCreate):
     id: UUID
     status: TaskStatus
+    completed_at: datetime | None = None
+
 
 
 class TaskUpdate(BaseModel):
@@ -26,7 +28,6 @@ class TaskUpdate(BaseModel):
         description: str | None = None
         status: TaskStatus | None = None
         due_date: date | None = None
-        
 
 class TaskWithUserResponse(TaskResponse):
     user_email: EmailStr
