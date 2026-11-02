@@ -1,8 +1,9 @@
 import pytest
-from sqlalchemy import delete
-
+from sqlalchemy import delete, create_engine
+from sqlalchemy.orm import sessionmaker
+from app.config import TEST_DATABASE_URL
 from app.main import app
-from app.database import get_db, get_test_db, SessionLocalTest
+from app.database import get_db
 from app.database_models import Task, User
 from app.security import hash_password
 from app.security import create_access_token
@@ -10,8 +11,20 @@ from app.security import create_access_token
 from fastapi.testclient import TestClient
 
 
+test_engine = create_engine(TEST_DATABASE_URL)
+SessionLocalTest = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
+
+def get_test_db():
+    test_db = SessionLocalTest()
+    try:
+        yield test_db
+    finally:
+        test_db.close()
+
+
 
 app.dependency_overrides[get_db] = get_test_db
+
 
 @pytest.fixture()
 def client():
