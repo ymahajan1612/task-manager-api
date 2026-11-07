@@ -11,3 +11,5 @@ if DATABASE_URL.startswith("postgresql://"):
         "postgresql+psycopg://",
         1
     )
+
+    
