@@ -486,3 +486,25 @@ def test_patch_clear_nullable_fields(client, auth_headers):
     ).json()
     assert data["description"] is None
     assert data["due_date"] is None
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"title": ""},
+        {"title": "a" * 201},
+        {"description": "Missing title"},
+        {"title": "Valid title", "due_date": "not-a-date"},
+    ],
+)
+def test_create_task_invalid_input(client, auth_headers, payload):
+    response = client.post(
+        "/tasks",
+        json=payload,
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 422
+
+
+    
