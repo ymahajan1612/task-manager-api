@@ -409,6 +409,7 @@ def test_status_complete(client, auth_headers):
     ).json()
 
     assert data["completed_at"] is not None
+    
 
     undo_response = client.patch(
         f"/tasks/{task_id}",
@@ -422,6 +423,80 @@ def test_status_complete(client, auth_headers):
     ).json()
     assert data["completed_at"] is None
 
+
+def test_repeated_completion_preserves_timestamp(
+    client, auth_headers, sample_task
+):
+    response = client.post(
+        "/tasks",
+        json=sample_task,
+        headers=auth_headers,
+    )
+    assert response.status_code == 201
+    task_id = response.json()["id"]
+
+    first_response = client.patch(
+        f"/tasks/{task_id}",
+        json={"status": "done"},
+        headers=auth_headers,
+    )
+    assert first_response.status_code == 200
+
+    first_timestamp = first_response.json()["completed_at"]
+    assert first_timestamp is not None
+
+    second_response = client.patch(
+        f"/tasks/{task_id}",
+        json={"status": "done"},
+        headers=auth_headers,
+    )
+    assert second_response.status_code == 200
+
+    second_timestamp = second_response.json()["completed_at"]
+
+    assert second_timestamp == first_timestamp
+
+
+def test_recompletion_updates_timestamp(
+    client, auth_headers, sample_task
+):
+    response = client.post(
+        "/tasks",
+        json=sample_task,
+        headers=auth_headers,
+    )
+    assert response.status_code == 201
+    task_id = response.json()["id"]
+
+    first_response = client.patch(
+        f"/tasks/{task_id}",
+        json={"status": "done"},
+        headers=auth_headers,
+    )
+    assert first_response.status_code == 200
+
+    first_timestamp = first_response.json()["completed_at"]
+    assert first_timestamp is not None
+
+    reopen_response = client.patch(
+        f"/tasks/{task_id}",
+        json={"status": "in_progress"},
+        headers=auth_headers,
+    )
+    assert reopen_response.status_code == 200
+    assert reopen_response.json()["completed_at"] is None
+
+    second_response = client.patch(
+        f"/tasks/{task_id}",
+        json={"status": "done"},
+        headers=auth_headers,
+    )
+    assert second_response.status_code == 200
+
+    second_timestamp = second_response.json()["completed_at"]
+
+    assert second_timestamp is not None
+    assert second_timestamp > first_timestamp
 
 def test_pagination(client, auth_headers):
     for i in range(15):
@@ -507,4 +582,3 @@ def test_create_task_invalid_input(client, auth_headers, payload):
     assert response.status_code == 422
 
 
-    
