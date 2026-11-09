@@ -111,19 +111,26 @@ def update_task(task_id: UUID, updated_task: TaskUpdate, current_user: User = De
     
     if task.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized to access this task")
+
+
+    updated_data = updated_task.model_dump(exclude_unset=True)
     
-    if updated_task.title is not None:
-        task.title = updated_task.title
+    if "title" in updated_data:
+        if updated_data["title"] is None or updated_data["title"].strip() == "":
+            raise HTTPException(status_code=422, detail="Title cannot be empty")
+        task.title = updated_data["title"]
 
-    if updated_task.description is not None:
-        task.description = updated_task.description
+    if "description" in updated_data:
+        task.description = updated_data["description"]
 
-    if updated_task.due_date is not None:
-        task.due_date = updated_task.due_date
+    if "due_date" in updated_data:
+        task.due_date = updated_data["due_date"]
 
-    if updated_task.status is not None:
+    if "status" in updated_data:
+        if updated_data["status"] is None:
+            raise HTTPException(status_code=422, detail="Status cannot be set to None")
         old_status = task.status
-        new_status = updated_task.status
+        new_status = updated_data["status"]
 
         task.status = new_status
 

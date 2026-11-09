@@ -421,4 +421,68 @@ def test_status_complete(client, auth_headers):
         f"/tasks/{task_id}", headers=auth_headers
     ).json()
     assert data["completed_at"] is None
-    
+
+
+def test_pagination(client, auth_headers):
+    for i in range(15):
+        client.post(
+            "/tasks",
+            json={
+                "title": f"Task {i+1}",
+                "description": f"Description for task {i+1}",
+                "due_date": "2026-09-30",
+            },
+            headers=auth_headers,
+        )
+
+    response = client.get("/tasks?offset=2&limit=5", headers=auth_headers)
+    response_all = client.get("/tasks", headers=auth_headers)
+    data = response.json()
+    data_all = response_all.json()
+
+    assert response.status_code == 200
+    assert len(data) == 5
+    assert data == data_all[2:7]
+
+
+@pytest.mark.parametrize(
+        "query" ,
+        [
+            "limit=0",
+            "limit=101",
+            "offset=-1",
+        ]
+)
+def test_invalid_pagination(client, auth_headers, query):
+    response = client.get(f"/tasks?{query}", headers=auth_headers)
+
+    assert response.status_code == 422
+
+
+def test_patch_clear_nullable_fields(client, auth_headers):
+    response = client.post(
+        "/tasks",
+        json={
+            "title": "Task with nullable fields",
+            "description": "This task has a description and due date",
+            "due_date": "2026-09-30",
+        },
+        headers=auth_headers,
+    )
+
+    task_id = response.json()["id"]
+
+    json={"description": None, "due_date": None}
+    patch_response = client.patch(
+        f"/tasks/{task_id}",
+        json=json,
+        headers=auth_headers,
+    )
+
+    assert patch_response.status_code == 200
+
+    data = client.get(
+        f"/tasks/{task_id}", headers=auth_headers
+    ).json()
+    assert data["description"] is None
+    assert data["due_date"] is None
