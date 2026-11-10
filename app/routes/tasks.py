@@ -75,7 +75,8 @@ def list_tasks(
             description=task.description,
             status=task.status,
             due_date=task.due_date,
-            user_email=user_email
+            user_email=user_email,
+            completed_at=task.completed_at
         ))
     return tasks
 
@@ -140,6 +141,7 @@ def update_task(task_id: UUID, updated_task: TaskUpdate, current_user: User = De
         elif old_status == TaskStatus.DONE and new_status != TaskStatus.DONE:
             task.completed_at = None
 
+    task.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(task)
     return task
