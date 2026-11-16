@@ -70,3 +70,14 @@ def create_task(user_id, db, task):
     db.refresh(new_task)
 
     return new_task
+
+def get_task_by_id(user_id, db, task_id):
+    task = db.get(Task, task_id)
+
+    if not task:
+        raise TaskNotFoundError("Task not found")
+
+    if task.user_id != user_id:
+        raise TaskForbiddenError("You are not allowed to access this task")
+
+    return task

@@ -17,6 +17,45 @@ def test_create_task_success(db_session, sample_task, test_user):
     assert result.status == "not_started"
     assert result.completed_at is None
 
+
+def test_get_task_by_id_success(db_session, sample_task, test_user):
+    task = Task(
+        title=sample_task["title"],
+        description=sample_task["description"],
+        due_date=sample_task["due_date"],
+        user_id=test_user.id
+    )
+    db_session.add(task)
+    db_session.commit()
+
+    result = task_service.get_task_by_id(test_user.id, db_session, task.id)
+
+    assert result.id == task.id
+    assert result.title == sample_task["title"]
+    assert result.description == sample_task["description"]
+    assert result.due_date == datetime.strptime(sample_task["due_date"], "%Y-%m-%d").date()
+    assert result.user_id == test_user.id
+
+def test_get_task_by_id_not_found(db_session):
+    task_id = uuid4()
+    user_id = uuid4()
+
+    with pytest.raises(task_service.TaskNotFoundError):
+        task_service.get_task_by_id(user_id, db_session, task_id)
+
+def test_get_task_by_id_forbidden(test_user, second_user, db_session, sample_task):
+    task = Task(
+        title=sample_task["title"],
+        description=sample_task["description"],
+        due_date=sample_task["due_date"],
+        user_id=test_user.id
+    )
+    db_session.add(task)
+    db_session.commit()
+
+    with pytest.raises(task_service.TaskForbiddenError):
+        task_service.get_task_by_id(second_user.id, db_session, task.id)
+
 def test_update_task_not_found(db_session):
     task_id = uuid4()
     user_id = uuid4()
