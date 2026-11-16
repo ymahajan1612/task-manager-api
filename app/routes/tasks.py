@@ -83,13 +83,12 @@ def get_task(task_id: UUID, current_user: User = Depends(get_current_user), db: 
 
 @router.delete("/tasks/{task_id}", status_code=204)
 def delete_task(task_id: UUID, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> None:
-    task = db.get(Task, task_id)
-    if task is None:
-        raise HTTPException(status_code=404, detail="Task not found")
-    if task.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Not authorized to access this task")
-    db.delete(task)
-    db.commit()
+    try:
+        task_service.delete_task(current_user.id, db, task_id)
+    except TaskNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except TaskForbiddenError as e:
+        raise HTTPException(status_code=403, detail=str(e))
     
 
 

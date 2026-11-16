@@ -199,3 +199,44 @@ def test_task_update_invalid_field_keeps_task_unchanged(db_session, sample_task,
 
     assert task.title == "Test Title"
     assert task.description == "Test Description"
+
+
+def test_delete_task_success(db_session, sample_task, test_user):
+    task = Task(
+        title=sample_task["title"],
+        description=sample_task["description"],
+        due_date=sample_task["due_date"],
+        user_id=test_user.id
+    )
+    db_session.add(task)
+    db_session.commit()
+    db_session.refresh(task)
+
+    task_service.delete_task(test_user.id, db_session, task.id)
+
+    deleted_task = db_session.get(Task, task.id)
+    assert deleted_task is None
+
+def test_delete_task_not_found(db_session):
+    task_id = uuid4()
+    user_id = uuid4()
+
+    with pytest.raises(task_service.TaskNotFoundError):
+        task_service.delete_task(user_id, db_session, task_id)
+
+def test_delete_task_forbidden(test_user, second_user, db_session, sample_task):
+    task = Task(
+        title=sample_task["title"],
+        description=sample_task["description"],
+        due_date=sample_task["due_date"],
+        user_id=test_user.id
+    )
+    db_session.add(task)
+    db_session.commit()
+    db_session.refresh(task)
+
+    with pytest.raises(task_service.TaskForbiddenError):
+        task_service.delete_task(second_user.id, db_session, task.id)
+
+    existing_task = db_session.get(Task, task.id)
+    assert existing_task is not None
