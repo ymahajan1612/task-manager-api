@@ -92,11 +92,13 @@ def test_update_task_preserves_unset_fields(db_session, sample_task, test_user):
 @pytest.mark.parametrize(
     "initial_status, new_status, expected_completed_at",
     [
+        ("not_started", "not_started", None),
         ("not_started", "in_progress", None),
         ("not_started", "done", "set"),
         ("in_progress", "done", "set"),
         ("done", "in_progress", None),
         ("done", "not_started", None),
+        ("done", "done", "set"),
     ]
 )
 def test_update_task_status_transitions(initial_status, new_status, expected_completed_at, db_session, sample_task, test_user):
