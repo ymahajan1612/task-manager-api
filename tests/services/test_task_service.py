@@ -1,10 +1,21 @@
 
 from app.services import task_service 
-from app.schemas import TaskUpdate
+from app.schemas import TaskUpdate, TaskCreate
 from app.database_models import Task
 from datetime import datetime, timezone
 from uuid import uuid4
 import pytest
+
+def test_create_task_success(db_session, sample_task, test_user):
+    task_create = TaskCreate(**sample_task)
+    result = task_service.create_task(test_user.id, db_session, task_create)
+
+    assert result.title == sample_task["title"]
+    assert result.description == sample_task["description"]
+    assert result.due_date == datetime.strptime(sample_task["due_date"], "%Y-%m-%d").date()
+    assert result.user_id == test_user.id
+    assert result.status == "not_started"
+    assert result.completed_at is None
 
 def test_update_task_not_found(db_session):
     task_id = uuid4()

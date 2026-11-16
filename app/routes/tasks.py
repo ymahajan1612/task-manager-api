@@ -20,18 +20,8 @@ def create_task(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> Task:
-    new_task = Task(
-        title = task.title,
-        description = task.description,
-        user_id = current_user.id,
-        due_date = task.due_date
-    )
-
-    db.add(new_task)
-    db.commit()
-    db.refresh(new_task)
-
-    return new_task
+    return task_service.create_task(current_user.id, db, task)
+    
 
 @router.get("/tasks", response_model=list[TaskWithUserResponse])
 def list_tasks(

@@ -55,3 +55,18 @@ def update_task(user_id, db, task_id, updated_task):
     db.refresh(task)
 
     return task
+
+
+def create_task(user_id, db, task):
+    new_task = Task(
+        title=task.title,
+        description=task.description,
+        user_id=user_id,
+        due_date=task.due_date
+    )
+
+    db.add(new_task)
+    db.commit()
+    db.refresh(new_task)
+
+    return new_task
