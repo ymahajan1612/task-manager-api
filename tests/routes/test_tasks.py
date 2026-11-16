@@ -3,14 +3,6 @@ import pytest
 from uuid import UUID, uuid4
 
 
-@pytest.fixture
-def sample_task():
-    return {
-        "title": "Test Title",
-        "description": "Test Description",
-        "due_date": "2026-09-30",
-    }
-
 def test_root(client):
     response = client.get("/")
 

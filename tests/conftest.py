@@ -23,10 +23,23 @@ def get_test_db():
     finally:
         test_db.close()
 
-
-
 app.dependency_overrides[get_db] = get_test_db
 
+@pytest.fixture
+def db_session():
+    db = SessionLocalTest()
+    try:
+        yield db
+    finally:
+        db.close()
+
+@pytest.fixture
+def sample_task():
+    return {
+        "title": "Test Title",
+        "description": "Test Description",
+        "due_date": "2026-09-30",
+    }
 
 @pytest.fixture()
 def client():
