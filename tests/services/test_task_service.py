@@ -129,7 +129,7 @@ def test_update_task_status_transitions(initial_status, new_status, expected_com
         assert result.completed_at is None
 
 
-def task_update_invalid_field_keeps_task_unchanged(db_session, sample_task, test_user):
+def test_task_update_invalid_field_keeps_task_unchanged(db_session, sample_task, test_user):
     task = Task(
         title=sample_task["title"],
         description=sample_task["description"],
@@ -140,7 +140,7 @@ def task_update_invalid_field_keeps_task_unchanged(db_session, sample_task, test
     db_session.commit()
     db_session.refresh(task)
 
-    updated_task = TaskUpdate(title=None, description="Updated Description")
+    updated_task = TaskUpdate(description="Updated Description", status=None)
     with pytest.raises(task_service.InvalidTaskError):
         task_service.update_task(test_user.id, db_session, task.id, updated_task)
 
