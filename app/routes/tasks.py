@@ -1,7 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends, Query
 import logging
 from app.schemas import TaskCreate, TaskResponse, TaskUpdate, TaskStatus, TaskWithUserResponse
-from typing import List 
 
 
 from sqlalchemy.orm import Session
@@ -10,8 +9,9 @@ from app.database import get_db
 from app.dependencies import get_current_user
 from app.database_models import Task, User  
 from uuid import UUID
-from datetime import date, datetime, timezone
-
+from app.services import task_service
+from app.exceptions import TaskNotFoundError, TaskForbiddenError, InvalidTaskError
+from datetime import date
 router = APIRouter(tags=["tasks"])
 
 @router.post("/tasks", status_code=201, response_model=TaskResponse)
@@ -106,42 +106,12 @@ def delete_task(task_id: UUID, current_user: User = Depends(get_current_user), d
 
 @router.patch("/tasks/{task_id}", status_code=200, response_model=TaskResponse)
 def update_task(task_id: UUID, updated_task: TaskUpdate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> Task:
-    task = db.get(Task, task_id)
-    if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
-    
-    if task.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Not authorized to access this task")
-
-
-    updated_data = updated_task.model_dump(exclude_unset=True)
-    
-    if "title" in updated_data:
-        if updated_data["title"] is None or updated_data["title"].strip() == "":
-            raise HTTPException(status_code=422, detail="Title cannot be empty")
-        task.title = updated_data["title"]
-
-    if "description" in updated_data:
-        task.description = updated_data["description"]
-
-    if "due_date" in updated_data:
-        task.due_date = updated_data["due_date"]
-
-    if "status" in updated_data:
-        if updated_data["status"] is None:
-            raise HTTPException(status_code=422, detail="Status cannot be set to None")
-        old_status = task.status
-        new_status = updated_data["status"]
-
-        task.status = new_status
-
-        if old_status != TaskStatus.DONE and new_status == TaskStatus.DONE:
-            task.completed_at = datetime.now(timezone.utc)
-
-        elif old_status == TaskStatus.DONE and new_status != TaskStatus.DONE:
-            task.completed_at = None
-
-    task.updated_at = datetime.now(timezone.utc)
-    db.commit()
-    db.refresh(task)
-    return task
+    try:
+        updated_task = task_service.update_task(current_user.id, db, task_id, updated_task)
+        return updated_task
+    except TaskNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except TaskForbiddenError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except InvalidTaskError as e:
+        raise HTTPException(status_code=422, detail=str(e))
