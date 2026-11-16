@@ -1,11 +1,14 @@
-from app.exceptions import TaskNotFoundError, TaskForbiddenError, InvalidTaskError
-from app.database_models import Task
-from app.schemas import TaskStatus
+
 from datetime import datetime, timezone
+
+from app.database_models import Task
+from app.exceptions import TaskNotFoundError, TaskForbiddenError, InvalidTaskError
+from app.schemas import TaskStatus
 
 
 def update_task(user_id, db, task_id, updated_task):
     task = db.get(Task, task_id)
+
     if not task:
         raise TaskNotFoundError("Task not found")
 
@@ -14,9 +17,18 @@ def update_task(user_id, db, task_id, updated_task):
 
     updated_data = updated_task.model_dump(exclude_unset=True)
 
+    # Validate all supplied fields before modifying the ORM object
     if "title" in updated_data:
-        if updated_data["title"] is None or updated_data["title"].strip() == "":
+        title = updated_data["title"]
+        if title is None or not title.strip():
             raise InvalidTaskError("A task title must be a non-empty string")
+
+    if "status" in updated_data:
+        if updated_data["status"] is None:
+            raise InvalidTaskError("A task status cannot be null")
+
+    # Apply changes
+    if "title" in updated_data:
         task.title = updated_data["title"]
 
     if "description" in updated_data:
@@ -26,9 +38,6 @@ def update_task(user_id, db, task_id, updated_task):
         task.due_date = updated_data["due_date"]
 
     if "status" in updated_data:
-        if updated_data["status"] is None:
-            raise InvalidTaskError("A task status cannot be null")
-
         old_status = task.status
         new_status = updated_data["status"]
 
@@ -41,6 +50,8 @@ def update_task(user_id, db, task_id, updated_task):
             task.completed_at = None
 
     task.updated_at = datetime.now(timezone.utc)
+
     db.commit()
     db.refresh(task)
+
     return task
