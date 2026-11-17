@@ -1,10 +1,8 @@
 from fastapi import APIRouter, HTTPException, Depends, Query
-import logging
 from app.schemas import TaskCreate, TaskResponse, TaskUpdate, TaskStatus, TaskWithUserResponse
 
 
 from sqlalchemy.orm import Session
-from sqlalchemy import select
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.database_models import Task, User  
