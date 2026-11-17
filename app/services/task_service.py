@@ -1,9 +1,11 @@
 
 from datetime import datetime, timezone
 
-from app.database_models import Task
+from app.database_models import Task, User
 from app.exceptions import TaskNotFoundError, TaskForbiddenError, InvalidTaskError
 from app.schemas import TaskStatus
+
+from sqlalchemy import select
 
 
 def update_task(user_id, db, task_id, updated_task):
@@ -94,3 +96,36 @@ def delete_task(user_id, db, task_id):
 
     db.delete(task)
     db.commit()
+
+
+def list_tasks(
+    user_id,
+    db,
+    status=None,
+    due_before=None,
+    due_after=None,
+    limit=20,
+    offset=0
+):
+    stmt = (select(Task, User.email)
+    .join(User, Task.user_id == User.id)
+    .where(Task.user_id == user_id))
+
+    if status is not None:
+        stmt = stmt.where(Task.status == status)
+
+    if due_before is not None:
+        stmt = stmt.where(Task.due_date <= due_before)
+
+    if due_after is not None:
+        stmt = stmt.where(Task.due_date >= due_after)
+
+    stmt = (
+        stmt
+        .order_by(Task.created_at.desc(), Task.id.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+
+    result = db.execute(stmt).all()
+    return result

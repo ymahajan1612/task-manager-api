@@ -1,8 +1,8 @@
 
 from app.services import task_service 
-from app.schemas import TaskUpdate, TaskCreate
+from app.schemas import TaskUpdate, TaskCreate, TaskStatus
 from app.database_models import Task
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
 from uuid import uuid4
 import pytest
 
@@ -240,3 +240,203 @@ def test_delete_task_forbidden(test_user, second_user, db_session, sample_task):
 
     existing_task = db_session.get(Task, task.id)
     assert existing_task is not None
+
+
+def test_list_tasks_only_returns_current_users_tasks(test_user, second_user, db_session, sample_task):
+    task1 = Task(
+        title=sample_task["title"],
+        description=sample_task["description"],
+        due_date=sample_task["due_date"],
+        user_id=test_user.id,
+        status="not_started"
+    )
+    task2 = Task(
+        title="Another Task",
+        description="Another Description",
+        due_date=sample_task["due_date"],
+        user_id=second_user.id,
+        status="in_progress"
+    )
+    db_session.add(task1)
+    db_session.add(task2)
+    db_session.commit()
+
+    result = task_service.list_tasks(test_user.id, db_session)
+
+    assert len(result) == 1
+
+    task, user_email = result[0]
+
+    assert task.id == task1.id
+    assert user_email == test_user.email
+
+def test_list_tasks_filters_by_status(test_user, db_session, sample_task):
+    task1 = Task(
+        title=sample_task["title"],
+        description=sample_task["description"],
+        due_date=sample_task["due_date"],
+        user_id=test_user.id,
+        status=TaskStatus.NOT_STARTED
+    )
+    task2 = Task(
+        title="Another Task",
+        description="Another Description",
+        due_date=sample_task["due_date"],
+        user_id=test_user.id,
+        status=TaskStatus.IN_PROGRESS
+    )
+    db_session.add(task1)
+    db_session.add(task2)
+    db_session.commit()
+
+    result = task_service.list_tasks(test_user.id, db_session, status=TaskStatus.NOT_STARTED)
+
+    assert len(result) == 1
+
+    task, user_email = result[0]
+
+    assert task.id == task1.id
+    assert user_email == test_user.email
+
+
+def test_list_tasks_filters_by_due_date(test_user, db_session):
+    task1 = Task(
+        title="Task 1",
+        description="First task",
+        due_date=date(2026, 9, 30),
+        user_id=test_user.id,
+        status=TaskStatus.NOT_STARTED
+    )
+    task2 = Task(
+        title="Task 2",
+        description="Second task",
+        due_date=date(2026, 10, 15),
+        user_id=test_user.id,
+        status=TaskStatus.IN_PROGRESS
+    )
+
+    db_session.add_all([task1, task2])
+    db_session.commit()
+
+    # 1. due_before excludes later tasks
+    result = task_service.list_tasks(
+        test_user.id,
+        db_session,
+        due_before=date(2026, 10, 1)
+    )
+
+    assert {task.id for task, _ in result} == {task1.id}
+
+    # 2. due_before includes tasks on the boundary
+    result = task_service.list_tasks(
+        test_user.id,
+        db_session,
+        due_before=date(2026, 10, 15)
+    )
+
+    assert {task.id for task, _ in result} == {task1.id, task2.id}
+
+    # 3. due_after excludes earlier tasks
+    result = task_service.list_tasks(
+        test_user.id,
+        db_session,
+        due_after=date(2026, 10, 1)
+    )
+
+    assert {task.id for task, _ in result} == {task2.id}
+
+    # 4. due_after includes tasks on the boundary
+    result = task_service.list_tasks(
+        test_user.id,
+        db_session,
+        due_after=date(2026, 9, 30)
+    )
+
+    assert {task.id for task, _ in result} == {task1.id, task2.id}
+
+
+
+from datetime import datetime, timezone, timedelta
+
+
+def test_list_tasks_ordering(test_user, db_session):
+    base_time = datetime(2026, 11, 1, tzinfo=timezone.utc)
+
+    tasks = [
+        Task(
+            title=f"Task {i}",
+            user_id=test_user.id,
+            created_at=base_time + timedelta(days=i)
+        )
+        for i in range(3)
+    ]
+
+    db_session.add_all(tasks)
+    db_session.commit()
+
+    result = task_service.list_tasks(test_user.id, db_session)
+
+    returned_ids = [task.id for task, _ in result]
+
+    assert returned_ids == [
+        tasks[2].id,
+        tasks[1].id,
+        tasks[0].id
+    ]
+
+
+
+def test_list_tasks_pagination(test_user, db_session):
+    same_time = datetime(2026, 11, 1, tzinfo=timezone.utc)
+
+    tasks = [
+        Task(
+            title=f"Task {i}",
+            user_id=test_user.id,
+            created_at=same_time
+        )
+        for i in range(5)
+    ]
+
+    db_session.add_all(tasks)
+    db_session.commit()
+
+
+    expected_ids = sorted(
+        [task.id for task in tasks],
+        reverse=True
+    )
+
+    first_page = task_service.list_tasks(
+        test_user.id,
+        db_session,
+        limit=2,
+        offset=0
+    )
+
+    second_page = task_service.list_tasks(
+        test_user.id,
+        db_session,
+        limit=2,
+        offset=2
+    )
+
+    third_page = task_service.list_tasks(
+        test_user.id,
+        db_session,
+        limit=2,
+        offset=4
+    )
+
+    assert [task.id for task, _ in first_page] == expected_ids[:2]
+    assert [task.id for task, _ in second_page] == expected_ids[2:4]
+    assert [task.id for task, _ in third_page] == expected_ids[4:]
+
+    # No overlapping tasks between pages
+    all_returned_ids = [
+        task.id
+        for page in (first_page, second_page, third_page)
+        for task, _ in page
+    ]
+
+    assert len(all_returned_ids) == len(set(all_returned_ids)) == 5

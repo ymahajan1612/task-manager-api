@@ -33,30 +33,15 @@ def list_tasks(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    stmt = (
-    select(Task, User.email)
-    .join(User, Task.user_id == User.id)
-    .where(Task.user_id == current_user.id)
+    result = task_service.list_tasks(
+        user_id=current_user.id,
+        db=db,
+        status=status,
+        due_before=due_before,
+        due_after=due_after,
+        limit=limit,
+        offset=offset
     )
-
-
-    if status is not None:
-        stmt = stmt.where(Task.status == status)
-
-    if due_before is not None:
-        stmt = stmt.where(Task.due_date <= due_before)
-
-    if due_after is not None:
-        stmt = stmt.where(Task.due_date >= due_after)
-
-    stmt = (
-        stmt
-        .order_by(Task.created_at.desc(), Task.id.desc())
-        .offset(offset)
-        .limit(limit)
-    )
-
-    result = db.execute(stmt).all()
     tasks = []
     for task, user_email in result:
         tasks.append(TaskWithUserResponse(
