@@ -4,9 +4,11 @@ from sqlalchemy import select
 
 from app.database import get_db
 from app.database_models import User
+from app.exceptions import UserExistsError
 from app.schemas import UserCreate, UserResponse, TokenResponse, LoginRequest
-from app.security import hash_password, verify_password, create_access_token
+from app.security import verify_password, create_access_token
 
+from app.services import auth_service
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -16,23 +18,10 @@ def register_user(
     user_data: UserCreate,
     db: Session = Depends(get_db),
 ):
-    # Check if user already exists
-    stmt = select(User).where(User.email == user_data.email)
-    existing_user = db.execute(stmt).scalar_one_or_none()
-
-    if existing_user:
+    try:
+        return auth_service.register_user(user_data, db)
+    except UserExistsError:
         raise HTTPException(status_code=400, detail="Email already registered")
-
-    # Create new user
-    hashed_password = hash_password(user_data.password)
-    new_user = User(
-        email=user_data.email,
-        hashed_password=hashed_password
-    )
-
-    db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
 
     return new_user
 

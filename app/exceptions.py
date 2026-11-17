@@ -6,3 +6,6 @@ class TaskForbiddenError(Exception):
 
 class InvalidTaskError(Exception):
     pass
+
+class UserExistsError(Exception):
+    pass
