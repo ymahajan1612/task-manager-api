@@ -2,8 +2,8 @@
 from app.database_models import User
 from sqlalchemy import select
 
-from app.exceptions import UserExistsError
-from app.security import hash_password
+from app.exceptions import InvalidCredentialsError, UserExistsError
+from app.security import hash_password, verify_password, create_access_token
 
 def register_user(
     user_data,
@@ -28,3 +28,20 @@ def register_user(
     db.refresh(new_user)
 
     return new_user
+
+def login_user(
+    login_request,
+    db
+):
+    # Check if user exists
+    stmt = select(User).where(User.email == login_request.email)
+    user = db.execute(stmt).scalar_one_or_none()
+
+    if not user:
+        raise InvalidCredentialsError("Invalid email or password")
+
+    # Verify password
+    if not verify_password(login_request.password, user.hashed_password):
+        raise InvalidCredentialsError("Invalid email or password")
+
+    return create_access_token(user_id=str(user.id))
